@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>秘密聖誕老人｜遠端交換禮物抽籤</title>
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Google Fonts: Noto Sans TC & Noto Serif TC 營造溫暖文青質感 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet" />
+  <!-- 引入 Canvas Confetti 製作揭曉時的慶祝彩帶效果 -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: {
+              50: '#FCFBF8',
+              100: '#F7F4EE',
+              200: '#EFE9DE',
+              300: '#E2D8C8',
+            },
+            sage: {
+              50: '#F2F5F2',
+              100: '#E1E8E2',
+              500: '#5D7A68',
+              600: '#4A6354',
+              700: '#394D41',
+            },
+            terracotta: {
+              100: '#F6E6E0',
+              500: '#B85D43',
+              600: '#9E4B33',
+            },
+            caramel: {
+              500: '#C48B5A',
+              600: '#A87244',
+            },
+            ink: {
+              700: '#4A4641',
+              800: '#36322E',
+              900: '#24211E',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'sans-serif'],
+            serif: ['"Noto Serif TC"', 'serif'],
+          },
+          boxShadow: {
+            'soft': '0 10px 30px -5px rgba(54, 50, 46, 0.06)',
+            'card': '0 4px 20px -2px rgba(54, 50, 46, 0.05)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 自訂信封翻蓋與微動畫 */
+    body {
+      background-color: #F7F4EE;
+      background-image: radial-gradient(#E2D8C8 0.8px, transparent 0.8px);
+      background-size: 24px 24px;
+      color: #36322E;
+    }
+
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .animate-float {
+      animation: floatSlow 3.5s ease-in-out infinite;
+    }
+
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.92) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .animate-pop-in {
+      animation: popIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* 刮刮樂 / 拆信封卡片質感 */
+    .wax-seal {
+      background: radial-gradient(circle at 35% 35%, #CE6D52, #9E4B33);
+      box-shadow: 0 6px 14px rgba(158, 75, 51, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+    }
+
+    /* 隱藏捲軸但保留滾動功能 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-sage-100 selection:text-sage-700">
+
+  <!-- 頂部品牌標題列 -->
+  <header class="w-full pt-8 pb-4 px-4 text-center">
+    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cream-200/80 border border-cream-300 text-xs font-medium text-ink-700 mb-3">
+      <span>🎄</span>
+      <span>100% 本地加密運算・零重複・絕對保密</span>
+    </div>
+    <h1 class="font-serif text-3xl sm:text-4xl font-bold text-ink-900 tracking-tight">
+      秘密聖誕老人抽籤室
+    </h1>
+    <p class="mt-2 text-sm sm:text-base text-ink-700 max-w-md mx-auto">
+      即使四散各地，也能透過專屬加密信封完成一場充滿驚喜的交換禮物。
+    </p>
+  </header>
+
+  <!-- 主要內容區塊 -->
+  <main class="flex-grow w-full max-w-xl mx-auto px-4 py-4 sm:py-6">
+
+    <!-- 提示訊息 Toast (取代 alert) -->
+    <div id="toast-container" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3">
+      <div id="toast-box" class="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg bg-ink-900 text-cream-50 text-sm font-medium">
+        <span id="toast-icon">✨</span>
+        <span id="toast-message">訊息提示</span>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 視圖 1：發起人設定名單 & 生成專屬連結區      -->
+    <!-- ========================================== -->
+    <section id="organizer-view" class="space-y-6 animate-pop-in">
+      
+      <!-- 步驟 1：填寫活動資訊與名單 -->
+      <div id="setup-card" class="bg-cream-50 rounded-3xl p-6 sm:p-8 shadow-soft border border-cream-300/80">
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex items-center gap-2.5">
+            <span class="w-7 h-7 rounded-full bg-sage-500 text-white text-xs font-bold flex items-center justify-center">1</span>
+            <h2 class="font-serif text-xl font-bold text-ink-900">建立交換禮物名單</h2>
+          </div>
+          <button type="button" onclick="toggleBulkModal()" class="text-xs font-medium text-sage-600 hover:text-sage-700 underline underline-offset-4 py-1 px-2 rounded-lg hover:bg-sage-50 transition">
+            📋 批次貼上多行名單
+          </button>
+        </div>
+
+        <!-- 活動備註欄位 (選填) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-6">
+          <div>
+            <label class="block text-xs font-semibold text-ink-700 mb-1.5">活動名稱（選填）</label>
+            <input type="text" id="event-title" placeholder="例如：2026 聖誕交換禮物"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-cream-300 text-sm text-ink-900 placeholder:text-ink-700/40 focus:outline-none focus:ring-2 focus:ring-sage-500/30 focus:border-sage-500 transition" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-ink-700 mb-1.5">預算 / 規則備註（選填）</label>
+            <input type="text" id="event-note" placeholder="例如：預算 $500 內・紅色系禮物"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-cream-300 text-sm text-ink-900 placeholder:text-ink-700/40 focus:outline-none focus:ring-2 focus:ring-sage-500/30 focus:border-sage-500 transition" />
+          </div>
+        </div>
+
+        <!-- 新增參與者輸入框 -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-ink-700 mb-1.5">
+            新增參與者 <span class="text-ink-700/60 font-normal">（建議 3 人以上，自己也要記得加入喔！）</span>
+          </label>
+          <div class="flex gap-2">
+            <input type="text" id="participant-input" placeholder="輸入朋友的名字或暱稱..."
+              onkeydown="if(event.key === 'Enter') { event.preventDefault(); addParticipant(); }"
+              class="flex-grow px-4 py-3 rounded-xl bg-white border border-cream-300 text-sm text-ink-900 placeholder:text-ink-700/40 focus:outline-none focus:ring-2 focus:ring-sage-500/30 focus:border-sage-500 transition" />
+            <button type="button" onclick="addParticipant()"
+              class="px-5 py-3 rounded-xl bg-sage-500 hover:bg-sage-600 active:scale-[0.98] text-white text-sm font-semibold transition shadow-sm whitespace-nowrap">
+              ＋ 加入
+            </button>
+          </div>
+        </div>
+
+        <!-- 參與者標籤清單 -->
+        <div class="bg-cream-100/80 rounded-2xl p-4 border border-cream-200 min-h-[110px]">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-xs font-medium text-ink-700">目前已加入：<strong id="count-badge" class="text-sage-600 text-sm">0</strong> 人</span>
+            <button type="button" id="clear-all-btn" onclick="clearAllParticipants()" class="hidden text-xs text-terracotta-600 hover:underline">
+              清空全部
+            </button>
+          </div>
+
+          <div id="participants-list" class="flex flex-wrap gap-2">
+            <!-- 動態產生參與者膠囊標籤 -->
+            <p id="empty-hint" class="text-xs text-ink-700/50 py-4 w-full text-center">
+              尚未加入任何成員，請在上方輸入名字或點擊「批次貼上」✨
+            </p>
+          </div>
+        </div>
+
+        <!-- 少於 3 人溫馨提醒 -->
+        <div id="two-person-warning" class="hidden mt-3 px-3.5 py-2.5 rounded-xl bg-caramel-500/10 border border-caramel-500/30 text-xs text-ink-800 flex items-start gap-2">
+          <span>💡</span>
+          <span>目前只有 2 位參與者，互抽的話彼此都會知道是對方送的喔！建議至少 3 人以上會更有神秘感。</span>
+        </div>
+
+        <!-- 開始配對按鈕 -->
+        <div class="mt-6">
+          <button type="button" onclick="generateSecretMatches()"
+            class="w-full py-3.5 px-6 rounded-2xl bg-terracotta-500 hover:bg-terracotta-600 active:scale-[0.99] text-white font-semibold text-base shadow-md shadow-terracotta-500/20 transition flex items-center justify-center gap-2">
+            <span>🎁</span>
+            <span>開始秘密配對並產生專屬連結</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 步驟 2：配對完成與發送連結區 (預設隱藏) -->
+      <div id="result-links-card" class="hidden bg-cream-50 rounded-3xl p-6 sm:p-8 shadow-soft border border-cream-300/80 animate-pop-in">
+        <div class="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="w-7 h-7 rounded-full bg-terracotta-500 text-white text-xs font-bold flex items-center justify-center">2</span>
+              <h2 class="font-serif text-xl font-bold text-ink-900">專屬秘密信封已封裝！</h2>
+            </div>
+            <p class="text-xs sm:text-sm text-ink-700 leading-relaxed mt-1">
+              配對結果已加密藏進各自的網址中，<strong>連你也看不到別人的對象</strong>。請依序複製訊息私訊傳給每位朋友！
+            </p>
+          </div>
+        </div>
+
+        <!-- 安全提示橫幅 -->
+        <div class="mb-5 p-3.5 rounded-2xl bg-sage-50 border border-sage-100 text-xs text-sage-700 flex items-center gap-2.5">
+          <span class="text-base">🔒</span>
+          <span>小提醒：請不要點開別人的連結，找到你自己的名字點開即可！</span>
+        </div>
+
+        <!-- 每位參與者的專屬發送卡片列表 -->
+        <div id="links-container" class="space-y-3">
+          <!-- 動態產生每個人的專屬複製列 -->
+        </div>
+
+        <!-- 底部重新設定按鈕 -->
+        <div class="mt-6 pt-5 border-t border-cream-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button type="button" onclick="resetToSetup()"
+            class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-cream-300 bg-white hover:bg-cream-100 text-xs font-medium text-ink-700 transition">
+            ← 修改名單 / 重新抽籤
+          </button>
+          <span class="text-[11px] text-ink-700/60">所有資料皆未上傳伺服器，關閉網頁即清除</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 視圖 2：參與者開獎畫面 (網址帶有參數時顯示)   -->
+    <!-- ========================================== -->
+    <section id="reveal-view" class="hidden animate-pop-in">
+      <div class="bg-cream-50 rounded-3xl p-6 sm:p-9 shadow-soft border border-cream-300/80 text-center relative overflow-hidden">
+        
+        <!-- 頂部裝飾彩旗感圓點 -->
+        <div class="flex justify-center gap-2 mb-5">
+          <span class="w-2.5 h-2.5 rounded-full bg-sage-500"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-terracotta-500"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-caramel-500"></span>
+        </div>
+
+        <!-- 活動標題徽章 -->
+        <div id="reveal-event-badge" class="inline-block px-3.5 py-1 rounded-full bg-cream-200 text-ink-800 text-xs font-semibold mb-3">
+          🎄 2026 聖誕交換禮物
+        </div>
+
+        <h2 class="font-serif text-2xl sm:text-3xl font-bold text-ink-900">
+          嗨，<span id="reveal-giver-name" class="text-terracotta-600 underline decoration-terracotta-500/30 underline-offset-4">朋友</span>！
+        </h2>
+        <p class="text-sm text-ink-700 mt-2">
+          你的專屬交換禮物任務信封已經送達
+        </p>
+
+        <!-- 互動信封區域 (未拆開前) -->
+        <div id="envelope-closed" class="my-8">
+          <div onclick="openSecretEnvelope()"
+            class="group cursor-pointer mx-auto max-w-sm bg-gradient-to-b from-cream-100 to-cream-200 border-2 border-dashed border-caramel-500/50 hover:border-terracotta-500 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg animate-float">
+            
+            <!-- 火漆印章按鈕 -->
+            <div class="w-20 h-20 mx-auto rounded-full wax-seal flex items-center justify-center text-cream-50 text-3xl mb-4 group-hover:scale-110 transition-transform duration-300">
+              ✉️
+            </div>
+
+            <p class="font-serif text-lg font-bold text-ink-900">
+              點擊火漆印章拆開信封
+            </p>
+            <p class="text-xs text-ink-700/75 mt-1.5">
+              請確認周遭沒有其他參與者正在偷看螢幕 👀
+            </p>
+          </div>
+        </div>
+
+        <!-- 揭曉結果區域 (拆開後顯示) -->
+        <div id="envelope-opened" class="hidden my-7 animate-pop-in">
+          <div class="mx-auto max-w-sm bg-white rounded-3xl p-6 sm:p-8 border-2 border-sage-500/30 shadow-card relative">
+            <span class="text-xs font-semibold tracking-wider uppercase text-sage-600 bg-sage-50 px-3 py-1 rounded-full">
+              ✨ 你的秘密送禮對象是 ✨
+            </span>
+
+            <div class="my-5 py-4 px-3 rounded-2xl bg-cream-100/70 border border-cream-200">
+              <p id="reveal-receiver-name" class="font-serif text-3xl sm:text-4xl font-bold text-ink-900 tracking-wide break-words">
+                對象名字
+              </p>
+            </div>
+
+            <!-- 活動規則與預算備註 -->
+            <div id="reveal-note-box" class="hidden text-left bg-terracotta-100/50 border border-terracotta-500/20 rounded-xl p-3.5 mb-4">
+              <p class="text-[11px] font-bold text-terracotta-600 mb-0.5">📌 活動備註 / 預算限制</p>
+              <p id="reveal-note-text" class="text-xs sm:text-sm text-ink-800 font-medium"></p>
+            </div>
+
+            <p class="text-xs text-ink-700 leading-relaxed">
+              📸 <strong>請立即截圖保存此畫面</strong>，並絕對保密，千萬不要讓其他人知道喔！
+            </p>
+          </div>
+        </div>
+
+        <!-- 底部導流：自己也想辦一場 -->
+        <div class="mt-6 pt-5 border-t border-cream-200">
+          <button type="button" onclick="switchToOrganizerMode()"
+            class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-sage-600 hover:text-sage-700 py-2 px-4 rounded-xl hover:bg-sage-50 transition">
+            <span>🎄</span>
+            <span>我也要發起新的交換禮物抽籤</span>
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 批次貼上名單 Modal -->
+  <div id="bulk-modal" class="hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-cream-50 rounded-3xl max-w-md w-full p-6 shadow-xl border border-cream-300 animate-pop-in">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-serif text-lg font-bold text-ink-900">批次貼上參與者名單</h3>
+        <button type="button" onclick="toggleBulkModal()" class="w-8 h-8 rounded-full hover:bg-cream-200 flex items-center justify-center text-ink-700">✕</button>
+      </div>
+      <p class="text-xs text-ink-700 mb-3">
+        請輸入或貼上名單，<strong>一行一個名字</strong>（支援從 LINE 群組名單直接複製貼上）：
+      </p>
+      <textarea id="bulk-textarea" rows="6" placeholder="王小明&#10;陳小美&#10;林大華&#10;張雅婷"
+        class="w-full p-3.5 rounded-2xl bg-white border border-cream-300 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-sage-500/30 focus:border-sage-500"></textarea>
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" onclick="toggleBulkModal()" class="px-4 py-2.5 rounded-xl text-xs font-medium text-ink-700 hover:bg-cream-200 transition">
+          取消
+        </button>
+        <button type="button" onclick="processBulkNames()" class="px-5 py-2.5 rounded-xl bg-sage-500 hover:bg-sage-600 text-white text-xs font-semibold transition">
+          確認匯入名單
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 頁尾版權與隱私說明 -->
+  <footer class="w-full py-6 px-4 text-center text-xs text-ink-700/60">
+    <p>Secret Santa Generator • 專為遠距好友打造的暖心交換禮物工具</p>
+  </footer>
+
+  <script>
+    // ==========================================
+    // 狀態管理與核心資料結構
+    // ==========================================
+    let participants = []; // 存放參與者字串陣列
+    let generatedAssignments = []; // 存放配對與連結資料 (不直接顯示對象名字在畫面上)
+
+    // ==========================================
+    // 工具函式：UTF-8 安全的 Base64 編碼與解碼
+    // 確保中文字元、Emoji 在所有瀏覽器與 LINE 內建瀏覽器都能正確編解碼
+    // ==========================================
+    function encodePayload(obj) {
+      const jsonStr = JSON.stringify(obj);
+      const utf8Bytes = new TextEncoder().encode(jsonStr);
+      let binaryStr = '';
+      utf8Bytes.forEach((b) => {
+        binaryStr += String.fromCharCode(b);
+      });
+      // 轉換為 URL-safe Base64 (避免 + / = 在部分通訊軟體截斷網址)
+      return btoa(binaryStr)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    }
+
+    function decodePayload(encodedStr) {
+      try {
+        // 還原標準 Base64
+        let base64 = encodedStr.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+          base64 += '=';
+        }
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const jsonStr = new TextDecoder().decode(bytes);
+        return JSON.parse(jsonStr);
+      } catch (e) {
+        console.error('解碼失敗:', e);
+        return null;
+      }
+    }
+
+    // ==========================================
+    // 工具函式：Toast 提示框 (取代 alert)
+    // ==========================================
+    let toastTimer = null;
+    function showToast(message, icon = '✨') {
+      const container = document.getElementById('toast-container');
+      const msgEl = document.getElementById('toast-message');
+      const iconEl = document.getElementById('toast-icon');
+
+      msgEl.textContent = message;
+      iconEl.textContent = icon;
+
+      container.classList.remove('opacity-0', '-translate-y-3');
+      container.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        container.classList.remove('opacity-100', 'translate-y-0');
+        container.classList.add('opacity-0', '-translate-y-3');
+      }, 2600);
+    }
+
+    // ==========================================
+    // 工具函式：相容 iFrame 與手機的剪貼簿複製
+    // ==========================================
+    function copyTextToClipboard(text, successMsg) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-9999px';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showToast(successMsg || '已複製到剪貼簿！', '📋');
+        } else {
+          showToast('複製失敗，請手動選取複製', '⚠️');
+        }
+      } catch (err) {
+        showToast('無法自動複製，請手動複製', '⚠️');
+      }
+
+      document.body.removeChild(textArea);
+    }
+
+    // ==========================================
+    // 步驟一：參與者名單管理功能
+    // ==========================================
+    function addParticipant() {
+      const input = document.getElementById('participant-input');
+      const rawName = input.value.trim();
+
+      if (!rawName) {
+        showToast('請輸入參與者的名字喔！', '✍️');
+        input.focus();
+        return;
+      }
+
+      if (participants.includes(rawName)) {
+        showToast(`「${rawName}」已經在名單中囉，請加上區別（如：大${rawName}）`, '⚠️');
+        input.focus();
+        return;
+      }
+
+      participants.push(rawName);
+      input.value = '';
+      input.focus();
+      renderParticipants();
+    }
+
+    function removeParticipant(index) {
+      participants.splice(index, 1);
+      renderParticipants();
+    }
+
+    function clearAllParticipants() {
+      participants = [];
+      renderParticipants();
+      showToast('已清空所有名單', '🧹');
+    }
+
+    function renderParticipants() {
+      const listEl = document.getElementById('participants-list');
+      const countBadge = document.getElementById('count-badge');
+      const clearBtn = document.getElementById('clear-all-btn');
+      const warningEl = document.getElementById('two-person-warning');
+
+      countBadge.textContent = participants.length;
+
+      if (participants.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      // 2人時顯示提醒
+      if (participants.length === 2) {
+        warningEl.classList.remove('hidden');
+      } else {
+        warningEl.classList.add('hidden');
+      }
+
+      if (participants.length === 0) {
+        listEl.innerHTML = `
+          <p id="empty-hint" class="text-xs text-ink-700/50 py-4 w-full text-center">
+            尚未加入任何成員，請在上方輸入名字或點擊「批次貼上」✨
+          </p>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = participants.map((name, idx) => `
+        <span class="inline-flex items-center gap-1.5 pl-3.5 pr-2 py-1.5 rounded-full bg-white border border-cream-300 text-sm font-medium text-ink-800 shadow-2xs animate-pop-in">
+          <span>${escapeHtml(name)}</span>
+          <button type="button" onclick="removeParticipant(${idx})" aria-label="移除 ${escapeHtml(name)}"
+            class="w-5 h-5 rounded-full hover:bg-terracotta-100 text-ink-700/60 hover:text-terracotta-600 flex items-center justify-center text-xs transition">
+            ✕
+          </button>
+        </span>
+      `).join('');
+    }
+
+    // 批次貼上 Modal 控制
+    function toggleBulkModal() {
+      const modal = document.getElementById('bulk-modal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        document.getElementById('bulk-textarea').focus();
+      }
+    }
+
+    function processBulkNames() {
+      const textarea = document.getElementById('bulk-textarea');
+      const lines = textarea.value.split(/\r?\n|,|、/);
+      let addedCount = 0;
+      let duplicateCount = 0;
+
+      lines.forEach(line => {
+        // 移除常見編號如 "1. 王小明" 或 "- 王小明"
+        const cleaned = line.replace(/^[\d\.\-\*\s]+/, '').trim();
+        if (cleaned) {
+          if (!participants.includes(cleaned)) {
+            participants.push(cleaned);
+            addedCount++;
+          } else {
+            duplicateCount++;
+          }
+        }
+      });
+
+      textarea.value = '';
+      toggleBulkModal();
+      renderParticipants();
+
+      if (addedCount > 0) {
+        const dupText = duplicateCount > 0 ? `（略過 ${duplicateCount} 個重複名字）` : '';
+        showToast(`成功匯入 ${addedCount} 位參與者！${dupText}`, '🎉');
+      } else if (duplicateCount > 0) {
+        showToast('輸入的名字都已經在名單中囉！', '⚠️');
+      }
+    }
+
+    // ==========================================
+    // 核心演算法：錯排 (Derangement) 保證零重複、不抽到自己
+    // ==========================================
+    function generateDerangement(names) {
+      const n = names.length;
+      // 使用 Sattolo's Algorithm 產生單一隨機循環錯排 (Single Cyclic Derangement)
+      // 優點：不僅保證每個人都不會抽到自己 (arr[i] !== names[i])，
+      // 還保證所有人形成一個完整大閉環，不會出現「A跟B互抽、C跟D互抽」的小圈圈！
+      const shuffled = [...names];
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * i); // 注意：這裡是 < i (0 到 i-1)
+        const temp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = temp;
+      }
+      return shuffled;
+    }
+
+    // ==========================================
+    // 步驟二：產生專屬加密連結並切換到發送畫面
+    // ==========================================
+    function generateSecretMatches() {
+      if (participants.length < 2) {
+        showToast('至少需要 2 位參與者才能進行抽籤喔！', '🎁');
+        document.getElementById('participant-input').focus();
+        return;
+      }
+
+      const eventTitle = document.getElementById('event-title').value.trim() || '聖誕交換禮物';
+      const eventNote = document.getElementById('event-note').value.trim();
+
+      // 取得基底網址（移除現有的 hash 與 query）
+      const baseUrl = window.location.href.split('#')[0].split('?')[0];
+
+      // 執行錯排演算法
+      const receivers = generateDerangement(participants);
+
+      // 組裝每個人的加密資料（注意：不把 receivers 暴露在 DOM 文字上）
+      generatedAssignments = participants.map((giver, index) => {
+        const receiver = receivers[index];
+        const payload = {
+          g: giver,       // Giver (送禮者)
+          r: receiver,    // Receiver (收禮對象)
+          t: eventTitle,  // Title (活動名稱)
+          n: eventNote    // Note (備註/預算)
+        };
+        const token = encodePayload(payload);
+        const personalUrl = `${baseUrl}#gift=${token}`;
+
+        return {
+          giver,
+          url: personalUrl,
+          eventTitle,
+          eventNote
+        };
+      });
+
+      renderGeneratedLinks();
+
+      // 切換卡片顯示
+      document.getElementById('setup-card').classList.add('hidden');
+      document.getElementById('result-links-card').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showToast('配對完成！快把專屬信封傳給大家吧', '🎄');
+    }
+
+    function renderGeneratedLinks() {
+      const container = document.getElementById('links-container');
+      container.innerHTML = generatedAssignments.map((item, idx) => `
+        <div class="p-4 rounded-2xl bg-white border border-cream-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-sage-100 text-sage-700 font-bold text-sm flex items-center justify-center shrink-0">
+              ${escapeHtml(item.giver.charAt(0))}
+            </div>
+            <div>
+              <p class="font-bold text-ink-900 text-sm sm:text-base">${escapeHtml(item.giver)}</p>
+              <p class="text-[11px] text-ink-700/60">專屬加密信封已就緒</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 self-end sm:self-center w-full sm:w-auto">
+            <button type="button" onclick="copyInviteMessage(${idx})"
+              class="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-sage-500 hover:bg-sage-600 active:scale-[0.98] text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs">
+              <span>💌</span>
+              <span>複製給 ${escapeHtml(item.giver)} 的訊息</span>
+            </button>
+            <button type="button" onclick="copyRawLink(${idx})" title="僅複製網址"
+              class="px-3 py-2.5 rounded-xl bg-cream-100 hover:bg-cream-200 border border-cream-300 text-ink-700 text-xs font-medium transition">
+              🔗 網址
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function copyInviteMessage(index) {
+      const item = generatedAssignments[index];
+      if (!item) return;
+
+      const noteLine = item.eventNote ? `\n📌 活動備註：${item.eventNote}` : '';
+      const message = `🎄 嗨 ${item.giver}！這是「${item.eventTitle}」的秘密抽籤信封：${noteLine}\n👉 點開查看你的送禮對象（絕對保密）：\n${item.url}`;
+
+      copyTextToClipboard(message, `已複製給「${item.giver}」的專屬邀請訊息！`);
+    }
+
+    function copyRawLink(index) {
+      const item = generatedAssignments[index];
+      if (!item) return;
+      copyTextToClipboard(item.url, `已複製「${item.giver}」的專屬網址！`);
+    }
+
+    function resetToSetup() {
+      document.getElementById('result-links-card').classList.add('hidden');
+      document.getElementById('setup-card').classList.remove('hidden');
+    }
+
+    // ==========================================
+    // 步驟三：參與者開獎畫面邏輯
+    // ==========================================
+    let currentGiftData = null;
+
+    function checkUrlForGiftToken() {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#gift=')) {
+        const token = hash.replace('#gift=', '').trim();
+        const decoded = decodePayload(token);
+
+        if (decoded && decoded.g && decoded.r) {
+          currentGiftData = decoded;
+          showRevealView(decoded);
+          return true;
+        } else {
+          showToast('無效或損壞的抽籤連結，請向發起人重新索取', '⚠️');
+        }
+      }
+      return false;
+    }
+
+    function showRevealView(data) {
+      document.getElementById('organizer-view').classList.add('hidden');
+      document.getElementById('reveal-view').classList.remove('hidden');
+
+      // 重置信封狀態為未拆開
+      document.getElementById('envelope-closed').classList.remove('hidden');
+      document.getElementById('envelope-opened').classList.add('hidden');
+
+      // 填入資料
+      document.getElementById('reveal-event-badge').textContent = `🎄 ${data.t || '聖誕交換禮物'}`;
+      document.getElementById('reveal-giver-name').textContent = data.g;
+      document.getElementById('reveal-receiver-name').textContent = data.r;
+
+      const noteBox = document.getElementById('reveal-note-box');
+      if (data.n && data.n.trim() !== '') {
+        document.getElementById('reveal-note-text').textContent = data.n;
+        noteBox.classList.remove('hidden');
+      } else {
+        noteBox.classList.add('hidden');
+      }
+    }
+
+    function openSecretEnvelope() {
+      document.getElementById('envelope-closed').classList.add('hidden');
+      document.getElementById('envelope-opened').classList.remove('hidden');
+
+      // 觸發溫暖聖誕色系的彩帶動畫
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 65,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#5D7A68', '#B85D43', '#C48B5A', '#E2D8C8']
+        });
+      }
+    }
+
+    function switchToOrganizerMode() {
+      // 清除 URL Hash 回到建立模式
+      history.replaceState(null, null, window.location.pathname + window.location.search);
+      document.getElementById('reveal-view').classList.add('hidden');
+      document.getElementById('organizer-view').classList.remove('hidden');
+      document.getElementById('setup-card').classList.remove('hidden');
+      document.getElementById('result-links-card').classList.add('hidden');
+    }
+
+    // 防止 XSS 的 HTML 跳脫函式
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 監聽網址 Hash 變化（例如使用者在同分頁貼上新連結）
+    window.addEventListener('hashchange', () => {
+      if (!checkUrlForGiftToken()) {
+        switchToOrganizerMode();
+      }
+    });
+
+    // 頁面載入初始化
+    window.addEventListener('DOMContentLoaded', () => {
+      checkUrlForGiftToken();
+    });
+  </script>
+</body>
+</html>
